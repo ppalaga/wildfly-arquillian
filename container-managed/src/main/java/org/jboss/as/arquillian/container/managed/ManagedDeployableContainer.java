@@ -132,27 +132,39 @@ public final class ManagedDeployableContainer extends CommonDeployableContainer<
             this.waitOnPorts();
 
 
-            log.info("Starting container with: " + commandBuilder.build());
+            System.out.println("Starting container with: " + commandBuilder.build());
             process = Launcher.of(commandBuilder).setRedirectErrorStream(true).launch();
             new Thread(new ConsoleConsumer()).start();
             shutdownThread = addShutdownHook(process);
 
             long startupTimeout = getContainerConfiguration().getStartupTimeoutInSeconds();
             long timeout = startupTimeout * 1000;
+
+            long start = System.currentTimeMillis();
+
+            System.out.println("Starting container with timeout: " + timeout + " ms at "+ (System.currentTimeMillis() - start));
             boolean serverAvailable = false;
             long sleep = 1000;
             while (timeout > 0 && serverAvailable == false) {
                 long before = System.currentTimeMillis();
+                System.out.println("before = " + before + " ms");
                 serverAvailable = getManagementClient().isServerInRunningState();
                 timeout -= (System.currentTimeMillis() - before);
+                System.out.println("new timeout = " + timeout + " ms");
                 if (!serverAvailable) {
-                    if (processHasDied(process))
+                    if (processHasDied(process)) {
+                        System.out.println("died");
                         break;
+                    }
+                    System.out.println("sleep = " + sleep + " ms");
                     Thread.sleep(sleep);
                     timeout -= sleep;
+                    System.out.println("new timeout2 = " + timeout + " ms at "+ (System.currentTimeMillis() - start));
                     sleep = Math.max(sleep / 2, 100);
                 }
             }
+            System.out.println("start attempt ended with timeoout = " + timeout + " (spending "
+                    + (startupTimeout * 1000 - timeout) + "ms) ms at " + (System.currentTimeMillis() - start));
             if (!serverAvailable) {
                 destroyProcess(process);
                 throw new TimeoutException(String.format("Managed server was not started within [%d] s", getContainerConfiguration().getStartupTimeoutInSeconds()));
