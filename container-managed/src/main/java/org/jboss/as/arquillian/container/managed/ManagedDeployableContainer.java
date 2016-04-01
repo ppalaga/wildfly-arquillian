@@ -136,7 +136,6 @@ public final class ManagedDeployableContainer extends CommonDeployableContainer<
             process = Launcher.of(commandBuilder).setRedirectErrorStream(true).launch();
             boolean fwd = getContainerConfiguration().isOutputToConsole();
             new Thread(new ConsoleConsumer(process.getInputStream(), fwd, "out: ")).start();
-            new Thread(new ConsoleConsumer(process.getErrorStream(), fwd, "err: ")).start();
             shutdownThread = addShutdownHook(process);
 
             long startupTimeout = getContainerConfiguration().getStartupTimeoutInSeconds();
@@ -149,19 +148,14 @@ public final class ManagedDeployableContainer extends CommonDeployableContainer<
             long sleep = 1000;
             while (timeout > 0 && serverAvailable == false) {
                 long before = System.currentTimeMillis();
-                System.out.println("before = " + before + " ms");
                 serverAvailable = getManagementClient().isServerInRunningState();
                 timeout -= (System.currentTimeMillis() - before);
-                System.out.println("new timeout = " + timeout + " ms");
                 if (!serverAvailable) {
                     if (processHasDied(process)) {
-                        System.out.println("died");
-                        break;
+                        throw new RuntimeException("The container process exited unexpectedly with exit value "+ process.exitValue());
                     }
-                    System.out.println("sleep = " + sleep + " ms");
                     Thread.sleep(sleep);
                     timeout -= sleep;
-                    System.out.println("new timeout2 = " + timeout + " ms at "+ (System.currentTimeMillis() - start));
                     sleep = Math.max(sleep / 2, 100);
                 }
             }
