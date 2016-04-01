@@ -134,7 +134,8 @@ public final class ManagedDeployableContainer extends CommonDeployableContainer<
 
             System.out.println("Starting container with: " + commandBuilder.build());
             process = Launcher.of(commandBuilder).setRedirectErrorStream(true).launch();
-            new Thread(new ConsoleConsumer()).start();
+            new Thread(new ConsoleConsumer(process.getInputStream(), getContainerConfiguration().isOutputToConsole())).start();
+            new Thread(new ConsoleConsumer(process.getErrorStream(), getContainerConfiguration().isOutputToConsole())).start();
             shutdownThread = addShutdownHook(process);
 
             long startupTimeout = getContainerConfiguration().getStartupTimeoutInSeconds();
@@ -333,19 +334,25 @@ public final class ManagedDeployableContainer extends CommonDeployableContainer<
      *
      * @author Stuart Douglas
      */
-    private class ConsoleConsumer implements Runnable {
+    private static class ConsoleConsumer implements Runnable {
+
+        private final InputStream stream;
+        private final boolean forwardToConsole;
+
+        public ConsoleConsumer(InputStream stream, boolean forwardToConsole) {
+            super();
+            this.stream = stream;
+            this.forwardToConsole = forwardToConsole;
+        }
 
         @Override
         public void run() {
-            final InputStream stream = process.getInputStream();
-            final boolean writeOutput = getContainerConfiguration().isOutputToConsole();
-
             try {
                 byte[] buf = new byte[32];
                 int num;
                 // Do not try reading a line cos it considers '\r' end of line
                 while ((num = stream.read(buf)) != -1) {
-                    if (writeOutput)
+                    if (forwardToConsole)
                         System.out.write(buf, 0, num);
                 }
             } catch (IOException e) {
