@@ -134,8 +134,9 @@ public final class ManagedDeployableContainer extends CommonDeployableContainer<
 
             System.out.println("Starting container with: " + commandBuilder.build());
             process = Launcher.of(commandBuilder).setRedirectErrorStream(true).launch();
-            new Thread(new ConsoleConsumer(process.getInputStream(), getContainerConfiguration().isOutputToConsole())).start();
-            new Thread(new ConsoleConsumer(process.getErrorStream(), getContainerConfiguration().isOutputToConsole())).start();
+            boolean fwd = getContainerConfiguration().isOutputToConsole();
+            new Thread(new ConsoleConsumer(process.getInputStream(), fwd, "out: ")).start();
+            new Thread(new ConsoleConsumer(process.getErrorStream(), fwd, "err: ")).start();
             shutdownThread = addShutdownHook(process);
 
             long startupTimeout = getContainerConfiguration().getStartupTimeoutInSeconds();
@@ -338,24 +339,34 @@ public final class ManagedDeployableContainer extends CommonDeployableContainer<
 
         private final InputStream stream;
         private final boolean forwardToConsole;
+        private final String prefix;
 
-        public ConsoleConsumer(InputStream stream, boolean forwardToConsole) {
+
+        public ConsoleConsumer(InputStream stream, boolean forwardToConsole, String prefix) {
             super();
             this.stream = stream;
             this.forwardToConsole = forwardToConsole;
+            this.prefix = prefix;
         }
 
         @Override
         public void run() {
             try {
                 byte[] buf = new byte[32];
+                byte[] pref = prefix.getBytes("utf-8");
+                byte[] obuf = new byte[buf.length + pref.length];
+                System.arraycopy(pref, 0, obuf, 0, pref.length);
                 int num;
                 // Do not try reading a line cos it considers '\r' end of line
                 while ((num = stream.read(buf)) != -1) {
-                    if (forwardToConsole)
-                        System.out.write(buf, 0, num);
+                    if (forwardToConsole) {
+                        System.arraycopy(buf, 0, obuf, pref.length, num);
+                        System.out.write(obuf, 0, num + pref.length);
+                    }
                 }
+                System.out.println(prefix + "end of stream");
             } catch (IOException e) {
+                new RuntimeException("Exception in "+ prefix +" consumer").printStackTrace();
             }
         }
 
